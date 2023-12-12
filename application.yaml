@@ -9,9 +9,9 @@ spec:
   project: default
   source:
     # 해당 git repo 설정 및 path(폴더명) 적용
-    repoURL: ${2번 public git repo 주소}
+    repoURL: https://github.com/skcha-mzc/deployNginx
     targetRevision: HEAD
-    path: first-app
+    path: "./"
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
