@@ -1,0 +1,244 @@
+## --------------------------------------------------------------------------------
+##
+##                                      argocd
+##
+## --------------------------------------------------------------------------------
+argocd:
+
+  ## a prefix to use for argocd application names
+  ##  - allows a single instance of argocd to manage deployKF across multiple clusters
+  ##  - if non-empty, `argocd.destination` must be a remote cluster, this is because
+  ##    a single cluster can only have one instance of deployKF
+  ##
+  appNamePrefix: ""
+
+  ## the namespace in which argocd is deployed
+  ##
+  namespace: argocd
+
+  ## the project used for deployKF argocd applications
+  ##
+  project: default
+
+  ## the source used for deployKF argocd applications
+  ##
+  source:
+
+    ## configs specifying the git repo which contains your generated manifests
+    ##
+    repo:
+      ## the URL of your manifest git repo
+      ##  - for example, if you are using a GitHub repo named 'deployKF/examples', you might set this value
+      ##    to "https://github.com/deployKF/examples" or "git@github.com:deployKF/examples.git"
+      ##
+      url: "https://github.com/skcha-mzc/deployNginx"
+
+      ## the git revision which contains your generated manifests
+      ##  - for example, if you are using the 'main' branch of your repo, you might set this value to "main"
+      ##
+      revision: "main"
+
+      ## the path within your repo where the generated manifests are stored
+      ##  - for example, if you are using a folder named 'GENERATOR_OUTPUT' at the root of your repo,
+      ##    you might set this value to "./GENERATOR_OUTPUT/"
+      ##
+      path: "./GENERATOR_OUTPUT/"
+
+  ## the destination used for deployKF argocd applications
+  ##  - the value of `destination.name` takes precedence over `destination.server`
+  ##
+  destination:
+    server: https://kubernetes.default.svc
+    name: ""
+
+## --------------------------------------------------------------------------------
+##
+##                                  kubeflow-tools
+##
+## --------------------------------------------------------------------------------
+kubeflow_tools:
+
+  ## --------------------------------------
+  ##                 katib
+  ## --------------------------------------
+  katib:
+    enabled: true
+
+    ## mysql connection configs
+    ##  - if `useExternal` is true, katib will use the specified external mysql database
+    ##  - if `useExternal` is false, katib will use the embedded `deploykf_opt.deploykf_mysql` database,
+    ##    and all other configs will be ignored
+    ##
+    mysql:
+      useExternal: false
+      host: "mysql.example.com"
+      port: 3306
+      auth:
+        username: kubeflow
+        password: password
+        existingSecret: ""
+        existingSecretUsernameKey: "username"
+        existingSecretPasswordKey: "password"
+
+    ## mysql database name
+    ##
+    mysqlDatabase: katib
+
+
+  ## --------------------------------------
+  ##               notebooks
+  ## --------------------------------------
+  notebooks:
+    enabled: true
+
+    ## notebook spawner configs
+    ##  - these configs directly become the `spawner_ui_config.yaml` in the jupyter-web-app
+    ##
+    spawnerFormDefaults: {}
+
+
+  ## --------------------------------------
+  ##               pipelines
+  ## --------------------------------------
+  pipelines:
+    enabled: true
+
+    ## storage bucket configs
+    ##
+    bucket:
+      name: kubeflow-pipelines
+      region: ""
+
+    ## object store configs
+    ##  - if `useExternal` is true, pipelines will use the specified external object store
+    ##  - if `useExternal` is false, pipelines will use the embedded `deploykf_opt.deploykf_minio` object store,
+    ##    and all other configs will be ignored
+    ##
+    objectStore:
+      useExternal: false
+      host: s3.amazonaws.com
+      port: ""
+      useSSL: true
+
+      ## object store auth configs
+      ##  - if `fromEnv` is true, all other configs are ignored to allow for environment-based authentication like
+      ##     - AWS IRSA: https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html
+      ##     - GCP Workload Identity: https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+      ##       [WARNING] GCP Workload Identity is not currently supported by Kubeflow Pipelines, this is because
+      ##                 the api-server uses an S3 client to access the object store (even GCS), until a native
+      ##                 GCS client is used, GCS can only be used via its S3 API with HMAC keys for authentication
+      ##  - if `fromEnv` is true, you will likely need to set appropriate Pod ServiceAccount annotations:
+      ##     - annotations for Kubeflow Pipelines backend are set with these values:
+      ##        - `kubeflow_tools.pipelines.serviceAccounts.apiServer.annotations`
+      ##        - `kubeflow_tools.pipelines.serviceAccounts.frontend.annotations`
+      ##     - annotations for Argo Workflows backend are set with these values:
+      ##        - `kubeflow_dependencies.kubeflow_argo_workflows.controller.serviceAccount.annotations`
+      ##        - `kubeflow_dependencies.kubeflow_argo_workflows.workflow.serviceAccount.annotations`
+      ##     - annotations for Pods in Profiles are set using profile plugins, which are configured with these values:
+      ##        - `deploykf_core.deploykf_profiles_generator.profileDefaults.plugins`
+      ##        - `deploykf_core.deploykf_profiles_generator.profiles[].plugins`
+      ##
+      auth:
+        fromEnv: false
+        accessKey: my-access-key
+        secretKey: my-secret-key
+        existingSecret: ""
+        existingSecretAccessKeyKey: "AWS_ACCESS_KEY_ID"
+        existingSecretSecretKeyKey: "AWS_SECRET_ACCESS_KEY"
+
+    ## mysql connection configs
+    ##  - if `useExternal` is true, pipelines will use the specified external mysql database
+    ##  - if `useExternal` is false, pipelines will use the embedded `deploykf_opt.deploykf_mysql` database,
+    ##    and all other configs will be ignored
+    ##
+    mysql:
+      useExternal: false
+      host: "mysql.example.com"
+      port: 3306
+      auth:
+        username: kubeflow
+        password: password
+        existingSecret: ""
+        existingSecretUsernameKey: "username"
+        existingSecretPasswordKey: "password"
+
+    ## mysql database names
+    ##
+    mysqlDatabases:
+      cacheDatabase: kfp_cache
+      metadataDatabase: kfp_metadata
+      pipelinesDatabase: kfp_pipelines
+
+    ## configs specific to Kubeflow Pipelines v2
+    ##
+    kfpV2:
+
+      ## sets the default `pipeline_root` in each profile
+      ##  - https://www.kubeflow.org/docs/components/pipelines/v1/overview/pipeline-root/
+      ##  - if `kubeflow_tools.pipelines.objectStore.useExternal` is false, then this must be left as the default
+      ##  - the following template variables are available:
+      ##     - `{bucket_name}`: the name of the bucket (see `kubeflow_tools.pipelines.bucket.name`)
+      ##     - `{profile_name}`: the name of the profile
+      ##
+      defaultPipelineRoot: "minio://{bucket_name}/v2/artifacts/{profile_name}"
+
+      ## apply fixes to make MinIO work with KFP v2
+      ##  - these fixes are needed because KFP v2 uses hard-coded configs for MinIO
+      ##    https://github.com/kubeflow/pipelines/issues/9689
+      ##  - if true:
+      ##     - the name of all cloned object store auth secrets in profiles becomes "mlpipeline-minio-artifact"
+      ##     - the key names used in generated minio auth secrets becomes "accesskey" and "secretkey"
+      ##     - the 'kfp-launcher' containers in workflow pods are patched at runtime to set:
+      ##        - `MINIO_SERVICE_SERVICE_HOST` and `MINIO_SERVICE_SERVICE_PORT`
+      ##        - `ML_PIPELINE_SERVICE_HOST` and `ML_PIPELINE_SERVICE_PORT_GRPC`
+      ##     - the value of `kubeflow_tools.pipelines.objectStore.useExternal` must be false
+      ##
+      minioFix: true
+
+      ## overrides the image of 'kfp-launcher' containers at runtime
+      ##  - this is useful because pipelines compiled with v2-compatible mode use a hard-coded image
+      ##    https://github.com/kubeflow/pipelines/blob/1.8.22/sdk/python/kfp/compiler/v2_compat.py#L25
+      ##
+      launcherImage: ""
+
+    ## profile resource generation configs
+    ##
+    profileResourceGeneration:
+
+      ## if a PodDefault named "kubeflow-pipelines-api-token" should be generated in each profile namespace
+      ##  - the generated PodDefault will mount a serviceAccountToken volume which can be used to authenticate
+      ##    with the Kubeflow Pipelines API on Pods which have a `kubeflow-pipelines-api-token` label with value "true"
+      ##  - for more information, see the "Full Kubeflow (from inside cluster)" section of the following page:
+      ##    https://www.kubeflow.org/docs/components/pipelines/v1/sdk/connect-api/
+      ##  - the PodDefault will NOT be generated if `kubeflow_tools.poddefaults_webhook.enabled` is false,
+      ##    regardless of this setting
+      ##
+      kfpApiTokenPodDefault: false
+
+
+  ## --------------------------------------
+  ##          poddefaults-webhook
+  ## --------------------------------------
+  poddefaults_webhook:
+    enabled: true
+
+
+  ## --------------------------------------
+  ##             tensorboards
+  ## --------------------------------------
+  tensorboards:
+    enabled: true
+
+
+  ## --------------------------------------
+  ##           training-operator
+  ## --------------------------------------
+  training_operator:
+    enabled: true
+
+
+  ## --------------------------------------
+  ##                volumes
+  ## --------------------------------------
+  volumes:
+    enabled: true
